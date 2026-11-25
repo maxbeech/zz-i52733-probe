@@ -1,0 +1,23 @@
+i52733 probe v2 listening on 18082
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 37194)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+TypeError: H() takes no arguments
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 37200)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+TypeError: H() takes no arguments
+----------------------------------------
